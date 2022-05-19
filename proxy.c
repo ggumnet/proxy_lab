@@ -23,6 +23,7 @@ int main(int argc, char **argv)
     struct sockaddr_storage clientaddr;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t addrlen;
+    pthread_t tid;
 
     if (argc != 2)
     {
@@ -42,13 +43,14 @@ int main(int argc, char **argv)
         Getnameinfo(&clientaddr, addrlen, hostname, MAXLINE, port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-        do_proxy(connfd);
-        close(connfd);
+        Pthread_create(&tid, NULL, do_proxy, connfd);
+
     }
 }
 
 void do_proxy(int connfd)
 {
+    Pthread_detach(Pthread_self());
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char suffix[MAXLINE], domain[MAXLINE], filename[MAXLINE], cgiargs[MAXLINE];
@@ -102,6 +104,7 @@ void do_proxy(int connfd)
         printf("response: %s\n", response_msg_buf);
         Rio_writen(connfd, response_msg_buf, length);
     }
+    Close(connfd);
     Close(to_serverfd);
     return;
 }
