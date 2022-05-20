@@ -67,13 +67,15 @@ void do_proxy(int connfd)
 
     Rio_readinitb(&rio_client_read, connfd);
     Rio_readlineb(&rio_client_read, buf, MAXLINE);
+
+    printf("init request: %s\n", buf);
     
     printf("%s", buf);
     sscanf(buf, "%s %s %s", method, uri, version);
 
     if(strcmp("GET", method)!=0){
         fprintf(stderr, "method only GET\n");
-        exit(1);
+        return;
     }
 
     //make socket to communicate with server
@@ -87,7 +89,10 @@ void do_proxy(int connfd)
     strcpy(line.version, "HTTP/1.1");
 
 
+
     make_request(&request_buf, &line);
+
+    printf("parsed request: %s\n", request_buf);
 
     /*
     printf("port: %s\n", port);
@@ -101,7 +106,7 @@ void do_proxy(int connfd)
     int length;
 
     while((length = Rio_readnb(&rio_server_read, response_msg_buf, MAXLINE))>0){
-        printf("response: %s\n", response_msg_buf);
+        //printf("response: %s\n", response_msg_buf);
         Rio_writen(connfd, response_msg_buf, length);
     }
     Close(connfd);
@@ -130,6 +135,15 @@ void make_request(char* request_buf, request_line *line){
     //accept line
     
     strcat(request_buf, "Accept: */*");
+    strcat(request_buf, "\r\n");
+
+    //
+    strcat(request_buf, user_agent_hdr);
+
+    strcat(request_buf, "Connection: close");
+    strcat(request_buf, "\r\n");
+
+    strcat(request_buf, "Proxy-Connection: close");
     strcat(request_buf, "\r\n");
     
 
@@ -170,7 +184,7 @@ void parseuri(char* uri, char* suffix, char* domain, char *port, char* filename,
         strcpy(filename, "");    
         strcat(filename, suffixp);
         if (!suffixp||*(suffixp+1)=='\0')   
-            strcat(filename, "index.html"); 
+            strcat(filename, ""); 
     }
     //else dynamic
     else{
