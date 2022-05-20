@@ -8,6 +8,7 @@ typedef struct{
     char suffix[MAXLINE];
     char version[MAXLINE];
     char domain[MAXLINE];
+    char port[MAXLINE];
 }request_line;
 
 
@@ -52,13 +53,9 @@ void do_proxy(int connfd)
 {
     Pthread_detach(Pthread_self());
     struct stat sbuf;
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char suffix[MAXLINE], domain[MAXLINE], filename[MAXLINE], cgiargs[MAXLINE];
-    char port[MAXLINE];
-    char request_msg[MAXLINE], response_msg_buf[MAXLINE];
-    request_line line;
-    char request_buf[MAXLINE];
-
+    char buf[MAXLINE];
+    char request_buf[MAXLINE], response_msg_buf[MAXLINE];
+    request_line* line = Malloc(sizeof(request_line));;
     rio_t rio_client_read, rio_server_read;
     
     int to_serverfd;
@@ -67,38 +64,12 @@ void do_proxy(int connfd)
 
     Rio_readinitb(&rio_client_read, connfd);
     Rio_readlineb(&rio_client_read, buf, MAXLINE);
-
-    printf("init request: %s\n", buf);
     
-    printf("%s", buf);
-    sscanf(buf, "%s %s %s", method, uri, version);
+    parse_init_request(line, &request_buf, &buf);
 
-    if(strcmp("GET", method)!=0){
-        fprintf(stderr, "method only GET\n");
-        return;
-    }
+    printf("line: %s\n", line->domain);
 
-    //make socket to communicate with server
-
-    parseuri(uri, suffix, domain, port, filename, cgiargs); 
-
-    strcpy(line.uri, uri);
-    strcpy(line.domain, domain);
-    strcpy(line.method, "GET");
-    strcpy(line.suffix, suffix);
-    strcpy(line.version, "HTTP/1.1");
-
-
-
-    make_request(&request_buf, &line);
-
-    printf("parsed request: %s\n", request_buf);
-
-    /*
-    printf("port: %s\n", port);
-    printf("host: %s\n", domain); */
-
-    to_serverfd = Open_clientfd(domain, port);
+    to_serverfd = Open_clientfd(line->domain, line->port);
 
     Rio_writen(to_serverfd, request_buf, strlen(request_buf));
     Rio_readinitb(&rio_server_read, to_serverfd);
@@ -114,11 +85,47 @@ void do_proxy(int connfd)
     return;
 }
 
+void parse_init_request(request_line* line, char* request_buf, char* buf){
+    char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char suffix[MAXLINE], domain[MAXLINE], filename[MAXLINE], cgiargs[MAXLINE];
+    char port[MAXLINE];
+
+    sscanf(buf, "%s %s %s", method, uri, version);
+
+    
+
+    if(strcmp("GET", method)!=0){
+        fprintf(stderr, "method only GET\n");
+        return;
+    }
+
+    //make socket to communicate with server
+
+
+    parseuri(uri, suffix, domain, port, filename, cgiargs); 
+
+
+    strcpy(line->uri, uri);
+    strcpy(line->domain, domain);
+    strcpy(line->method, "GET");
+    strcpy(line->suffix, suffix);
+    strcpy(line->version, "HTTP/1.1");
+    strcpy(line->port, port);
+
+
+
+    make_request(request_buf, line);
+
+
+}
+
 
 void make_request(char* request_buf, request_line *line){
 
     //make request line
     
+
+
     strcpy(request_buf,"");
     strcat(request_buf, line->method);
     strcat(request_buf, " ");
@@ -131,6 +138,7 @@ void make_request(char* request_buf, request_line *line){
     strcat(request_buf, "Host: ");
     strcat(request_buf, line->domain);
     strcat(request_buf, "\r\n");
+
 
     //accept line
     
@@ -148,6 +156,7 @@ void make_request(char* request_buf, request_line *line){
     
 
     strcat(request_buf, "\r\n");
+
     return;
 }
 
