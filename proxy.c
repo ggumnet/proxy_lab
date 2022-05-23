@@ -9,14 +9,37 @@ typedef struct{
     char version[MAXLINE];
     char domain[MAXLINE];
     char port[MAXLINE];
+    void* next;
 }request_line;
+
+typedef struct{
+    char header[MAXLINE];
+    char data[MAXLINE];
+}header_line;
+
+typedef struct cache_node
+{
+  char hostname[MAXLINE];
+  char path[MAXLINE];
+  char* data;
+  size_t size;
+  struct cache_node* next;
+  clock_t last_access_time;
+} cache_node;
+
+
+header_line* header_line_list;
+
+
 
 
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
-void make_request(char* request_buf, request_line *line);
+void make_request(char* request_buf, request_line *line, char* buf);
 
 void do_proxy(int fd);
+
+void parse_header(char* buf);
 
 int main(int argc, char **argv)
 {
@@ -64,12 +87,24 @@ void do_proxy(int connfd)
 
     Rio_readinitb(&rio_client_read, connfd);
     Rio_readlineb(&rio_client_read, buf, MAXLINE);
-    
-    parse_init_request(line, &request_buf, &buf);
 
-    printf("line: %s\n", line->domain);
+    printf("connect request: %s\n",buf);
+    
+    parse_request(line, &request_buf, &buf);
 
     to_serverfd = Open_clientfd(line->domain, line->port);
+    memset(buf, 0, strlen(buf));
+
+
+    //for extra headers
+    Rio_readlineb(&rio_client_read, buf, MAXLINE);
+    
+    while(strcmp(buf, "\r\n"))
+    {
+        parse_header(buf);
+        memset(&buf[0], 0, sizeof(buf)); //flushing buffer
+        Rio_readlineb(&rio_client_read, buf, MAXLINE);
+    }
 
     Rio_writen(to_serverfd, request_buf, strlen(request_buf));
     Rio_readinitb(&rio_server_read, to_serverfd);
@@ -85,24 +120,22 @@ void do_proxy(int connfd)
     return;
 }
 
-void parse_init_request(request_line* line, char* request_buf, char* buf){
+void parse_request(request_line* line, char* request_buf, char* buf){
     char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char suffix[MAXLINE], domain[MAXLINE], filename[MAXLINE], cgiargs[MAXLINE];
     char port[MAXLINE];
 
     sscanf(buf, "%s %s %s", method, uri, version);
 
-    
-
-    if(strcmp("GET", method)!=0){
+    /*if(strcmp("GET", method)!=0){
         fprintf(stderr, "method only GET\n");
         return;
-    }
+    }*/
 
     //make socket to communicate with server
 
 
-    parseuri(uri, suffix, domain, port, filename, cgiargs); 
+    parse_request_line(uri, suffix, domain, port, filename, cgiargs); 
 
 
     strcpy(line->uri, uri);
@@ -112,15 +145,15 @@ void parse_init_request(request_line* line, char* request_buf, char* buf){
     strcpy(line->version, "HTTP/1.1");
     strcpy(line->port, port);
 
+    make_request(request_buf, line, buf);
+}
 
-
-    make_request(request_buf, line);
-
+void parse_header(char* buf){
 
 }
 
 
-void make_request(char* request_buf, request_line *line){
+void make_request(char* request_buf, request_line *line, char* buf){
 
     //make request line
     
@@ -160,7 +193,7 @@ void make_request(char* request_buf, request_line *line){
     return;
 }
 
-void parseuri(char* uri, char* suffix, char* domain, char *port, char* filename, char* cgiargs){
+void parse_request_line(char* uri, char* suffix, char* domain, char *port, char* filename, char* cgiargs){
 
     int is_static=1;
     char *hostp, *portp, *suffixp;
